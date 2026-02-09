@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cross Five</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0c;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    color: #e0ddd5;
+    overflow: hidden;
+  }
+
+  h1 {
+    font-weight: 300;
+    font-size: 1.1rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 1.5rem;
+  }
+
+  canvas { display: block; cursor: pointer; touch-action: none; }
+
+  .status {
+    margin-top: 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    color: #444;
+    height: 1.2em;
+    transition: color 0.3s;
+  }
+  .status.active { color: #c4956a; }
+
+  .info {
+    margin-top: 1rem;
+    display: flex;
+    gap: 2.5rem;
+    align-items: center;
+  }
+
+  .score {
+    font-size: 0.75rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    color: #555;
+  }
+  .score span { color: #c4956a; }
+
+  button {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid #2a2a2e;
+    color: #555;
+    padding: 0.45rem 1rem;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  button:hover { border-color: #555; color: #aaa; }
+
+  .help {
+    margin-top: 1.2rem;
+    font-size: 0.6rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    color: #333;
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0a0a0cee;
+    z-index: 10;
+    align-items: center;
+    justify-content: center;
+  }
+  .overlay.visible { display: flex; }
+
+  .modal {
+    background: #111114;
+    border: 1px solid #2a2a2e;
+    padding: 2rem 2.5rem;
+    max-width: 420px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    text-align: center;
+  }
+
+  .modal h2 {
+    font-weight: 300;
+    font-size: 0.9rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #c4956a;
+    margin-bottom: 1.2rem;
+  }
+
+  .modal p {
+    font-size: 0.7rem;
+    font-weight: 300;
+    color: #777;
+    letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+  }
+
+  .modal img {
+    max-width: 100%;
+    border: 1px solid #2a2a2e;
+    margin-bottom: 1rem;
+  }
+
+  .modal input[type="text"] {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    background: #0a0a0c;
+    border: 1px solid #2a2a2e;
+    color: #e0ddd5;
+    padding: 0.5rem 0.8rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.25s;
+    letter-spacing: 0.1em;
+  }
+  .modal input[type="text"]:focus { border-color: #c4956a; }
+
+  .modal .btn-row {
+    display: flex;
+    gap: 0.8rem;
+    justify-content: center;
+    margin-top: 1.2rem;
+    flex-wrap: wrap;
+  }
+
+  .modal a.dl-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: #c4956a;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 1.2rem;
+  }
+  .modal a.dl-link:hover { text-decoration: underline; }
+
+  .lb-list {
+    text-align: left;
+    margin: 0.8rem 0;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+  }
+  .lb-row {
+    display: flex;
+    padding: 0.4rem 0.6rem;
+    color: #888;
+  }
+  .lb-row:nth-child(odd) { background: #0e0e11; }
+  .lb-row .rank { width: 2rem; color: #555; }
+  .lb-row .name { flex: 1; color: #c4956a; }
+  .lb-row .lb-score { width: 3rem; text-align: right; color: #e0ddd5; }
+  .lb-row .date { width: 5.5rem; text-align: right; color: #444; font-size: 0.55rem; }
+
+  button:disabled { opacity: 0.3; cursor: default; }
+</style>
+</head>
+<body>
+
+<h1>Cross Five</h1>
+<canvas id="board"></canvas>
+<div class="status" id="status"></div>
+<div class="info">
+  <div class="score">lines <span id="scoreVal">0</span></div>
+  <button id="resetBtn">Reset</button>
+  <button id="giveUpBtn">Give Up</button>
+  <button id="lbBtn">Leaderboard</button>
+</div>
+
+<div class="overlay" id="gameOverOverlay">
+  <div class="modal">
+    <h2>Game Over</h2>
+    <p>Final score: <span id="finalScore">0</span> lines</p>
+    <img id="boardCapture" alt="Board screenshot">
+    <a class="dl-link" id="saveImgLink" download="cross-five.png">Save Image</a>
+    <div>
+      <input type="text" id="nameInput" placeholder="Your name" maxlength="20">
+    </div>
+    <div class="btn-row">
+      <button id="submitScoreBtn">Submit Score</button>
+      <button id="playAgainBtn">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="lbOverlay">
+  <div class="modal">
+    <h2>Leaderboard</h2>
+    <div class="lb-list" id="lbList"></div>
+    <div class="btn-row">
+      <button id="closeLbBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const scoreEl = document.getElementById('scoreVal');
+
+const SIZE = 20;
+const CELL = 22;
+const DOT_R = 4;
+const POINT_R = 1.2;
+const PAD = CELL;
+const SPAN = (SIZE - 1) * CELL;
+const LINE_LEN = 5;
+
+canvas.width = canvas.height = SPAN + PAD * 2;
+
+let grid = [];
+let claimedLines = [];
+let score = 0;
+let hoverCell = null;
+let statusTimeout;
+let gameOver = false;
+
+const DIRS = [[0,1],[1,0],[1,1],[1,-1]];
+
+/* Cross shape: 4 wide x 4 long arms on 20x20
+   Center: rows 8-11, cols 8-11 (4x4)
+   Arms extend 3 cells beyond center (4 dots per edge incl. corner):
+     Top:    rows 5-7,  cols 8-11
+     Bottom: rows 12-14, cols 8-11
+     Left:   rows 8-11, cols 5-7
+     Right:  rows 8-11, cols 12-14
+*/
+const CROSS = [
+  [5,8],[5,11],[8,11],[8,14],[11,14],[11,11],
+  [14,11],[14,8],[11,8],[11,5],[8,5],[8,8]
+];
+
+function crossDots() {
+  const set = new Set();
+  for (let i = 0; i < CROSS.length; i++) {
+    const [r1, c1] = CROSS[i];
+    const [r2, c2] = CROSS[(i + 1) % CROSS.length];
+    const dr = Math.sign(r2 - r1), dc = Math.sign(c2 - c1);
+    let r = r1, c = c1;
+    while (r !== r2 || c !== c2) {
+      set.add(r + ',' + c);
+      r += dr; c += dc;
+    }
+  }
+  return [...set].map(s => s.split(',').map(Number));
+}
+
+function initGrid() {
+  grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+  for (const [r, c] of crossDots()) grid[r][c] = 1;
+  claimedLines = [];
+  score = 0;
+  scoreEl.textContent = '0';
+}
+
+function px(row, col) {
+  return [PAD + col * CELL, PAD + row * CELL];
+}
+
+function isDot(r, c) {
+  return r >= 0 && r < SIZE && c >= 0 && c < SIZE && grid[r][c] > 0;
+}
+
+function lineKey(cells) {
+  return cells.map(p => `${p.r},${p.c}`).join('|');
+}
+
+function linesConflict(a, b) {
+  if (a.dr !== b.dr || a.dc !== b.dc) return false;
+  let shared = 0;
+  for (const p of a.cells) {
+    for (const q of b.cells) {
+      if (p.r === q.r && p.c === q.c) shared++;
+    }
+  }
+  return shared >= 2;
+}
+
+function findNewLines(pr, pc) {
+  const found = [];
+  for (const [dr, dc] of DIRS) {
+    for (let offset = 0; offset < LINE_LEN; offset++) {
+      const sr = pr - offset * dr, sc = pc - offset * dc;
+      const cells = [];
+      let valid = true;
+      for (let i = 0; i < LINE_LEN; i++) {
+        const r = sr + i * dr, c = sc + i * dc;
+        if (!isDot(r, c)) { valid = false; break; }
+        cells.push({ r, c });
+      }
+      if (!valid) continue;
+
+      const key = lineKey(cells);
+      if (found.some(f => lineKey(f.cells) === key)) continue;
+      if (claimedLines.some(cl => lineKey(cl.cells) === key)) continue;
+
+      const line = { cells, dr, dc };
+      if (claimedLines.some(cl => linesConflict(line, cl))) continue;
+
+      found.push(line);
+    }
+  }
+  return found;
+}
+
+function countPreview(r, c) {
+  if (grid[r][c] !== 0) return 0;
+  grid[r][c] = 2;
+  const n = findNewLines(r, c).length;
+  grid[r][c] = 0;
+  return n;
+}
+
+function previewLines(r, c) {
+  if (grid[r][c] !== 0) return [];
+  grid[r][c] = 2;
+  const result = findNewLines(r, c);
+  grid[r][c] = 0;
+  return result;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = '#131316';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < SIZE; i++) {
+    const p = PAD + i * CELL;
+    ctx.beginPath(); ctx.moveTo(PAD, p); ctx.lineTo(PAD + SPAN, p); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p, PAD); ctx.lineTo(p, PAD + SPAN); ctx.stroke();
+  }
+
+  for (const line of claimedLines) {
+    const [x1, y1] = px(line.cells[0].r, line.cells[0].c);
+    const [x2, y2] = px(line.cells[LINE_LEN - 1].r, line.cells[LINE_LEN - 1].c);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.strokeStyle = '#c4956a55';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  if (hoverCell && grid[hoverCell.r][hoverCell.c] === 0) {
+    const preview = previewLines(hoverCell.r, hoverCell.c);
+    for (const line of preview) {
+      const [x1, y1] = px(line.cells[0].r, line.cells[0].c);
+      const [x2, y2] = px(line.cells[LINE_LEN - 1].r, line.cells[LINE_LEN - 1].c);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.strokeStyle = '#c4956a30';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  if (hoverCell && grid[hoverCell.r][hoverCell.c] > 0) {
+    const lines = findNewLines(hoverCell.r, hoverCell.c);
+    for (const line of lines) {
+      const [x1, y1] = px(line.cells[0].r, line.cells[0].c);
+      const [x2, y2] = px(line.cells[LINE_LEN - 1].r, line.cells[LINE_LEN - 1].c);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.strokeStyle = '#c4956a40';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const [x, y] = px(r, c);
+      const v = grid[r][c];
+      if (v === 0) {
+        ctx.beginPath(); ctx.arc(x, y, POINT_R, 0, Math.PI * 2);
+        ctx.fillStyle = '#1e1e22'; ctx.fill();
+      } else {
+        const isPlayer = v === 2;
+        ctx.beginPath(); ctx.arc(x, y, DOT_R + 4, 0, Math.PI * 2);
+        ctx.fillStyle = isPlayer ? '#c4956a30' : '#c4956a20';
+        ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, DOT_R, 0, Math.PI * 2);
+        ctx.fillStyle = '#c4956a';
+        ctx.fill();
+      }
+    }
+  }
+
+  if (hoverCell && grid[hoverCell.r][hoverCell.c] === 0) {
+    const [x, y] = px(hoverCell.r, hoverCell.c);
+    const n = countPreview(hoverCell.r, hoverCell.c);
+    ctx.beginPath(); ctx.arc(x, y, DOT_R + 3, 0, Math.PI * 2);
+    ctx.fillStyle = n > 0 ? '#c4956a20' : '#c4956a0c';
+    ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, DOT_R, 0, Math.PI * 2);
+    ctx.fillStyle = n > 0 ? '#c4956a70' : '#c4956a30';
+    ctx.fill();
+  }
+}
+
+function cellAt(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX ?? e.touches?.[0]?.clientX) - rect.left;
+  const my = (e.clientY ?? e.touches?.[0]?.clientY) - rect.top;
+  const c = Math.round((mx - PAD) / CELL), r = Math.round((my - PAD) / CELL);
+  if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return null;
+  const [x, y] = px(r, c);
+  return Math.hypot(mx - x, my - y) <= CELL * 0.45 ? { r, c } : null;
+}
+
+function flash(msg) {
+  statusEl.textContent = msg;
+  statusEl.classList.add('active');
+  clearTimeout(statusTimeout);
+  statusTimeout = setTimeout(() => {
+    statusEl.classList.remove('active');
+    setTimeout(() => statusEl.textContent = '', 300);
+  }, 1500);
+}
+
+function handleAction(r, c) {
+  if (gameOver) return;
+  if (grid[r][c] === 0) {
+    grid[r][c] = 2;
+    const newLines = findNewLines(r, c);
+    if (newLines.length > 0) {
+      claimedLines.push(newLines[0]);
+      score += 1;
+      scoreEl.textContent = score;
+      flash(newLines.length > 1 ? '+1 line \u00b7 ' + (newLines.length - 1) + ' more available' : '+1 line');
+    } else {
+      grid[r][c] = 0;
+      flash('No line');
+    }
+  } else {
+    const validLines = findNewLines(r, c);
+    if (validLines.length > 0) {
+      claimedLines.push(validLines[0]);
+      score += 1;
+      scoreEl.textContent = score;
+      const remaining = validLines.length - 1;
+      flash('+1 line' + (remaining > 0 ? ' \u00b7 ' + remaining + ' more here' : ''));
+    }
+  }
+  draw();
+}
+
+canvas.addEventListener('mousemove', e => { hoverCell = cellAt(e); draw(); });
+canvas.addEventListener('mouseleave', () => { hoverCell = null; draw(); });
+canvas.addEventListener('click', e => {
+  const cell = cellAt(e);
+  if (cell) handleAction(cell.r, cell.c);
+});
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  hoverCell = cellAt(e.touches[0]);
+  draw();
+});
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (hoverCell) handleAction(hoverCell.r, hoverCell.c);
+  hoverCell = null;
+});
+
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const lbOverlay = document.getElementById('lbOverlay');
+const lbList = document.getElementById('lbList');
+const nameInput = document.getElementById('nameInput');
+const submitScoreBtn = document.getElementById('submitScoreBtn');
+const boardCapture = document.getElementById('boardCapture');
+const saveImgLink = document.getElementById('saveImgLink');
+const finalScoreEl = document.getElementById('finalScore');
+
+function resetGame() {
+  gameOver = false;
+  gameOverOverlay.classList.remove('visible');
+  lbOverlay.classList.remove('visible');
+  submitScoreBtn.disabled = false;
+  nameInput.value = '';
+  initGrid();
+  flash('Board reset');
+  draw();
+}
+
+async function showGameOver() {
+  gameOver = true;
+  hoverCell = null;
+  draw();
+  const dataUrl = canvas.toDataURL('image/png');
+  boardCapture.src = dataUrl;
+  saveImgLink.href = dataUrl;
+  finalScoreEl.textContent = score;
+  nameInput.value = '';
+
+  const entries = await fetchLeaderboard();
+  const canSubmit = entries.length < 10 || score > entries[entries.length - 1].score;
+  submitScoreBtn.disabled = !canSubmit;
+  nameInput.disabled = !canSubmit;
+  if (!canSubmit) {
+    nameInput.placeholder = 'Score too low';
+  } else {
+    nameInput.placeholder = 'Your name';
+  }
+
+  gameOverOverlay.classList.add('visible');
+}
+
+async function submitScore(name) {
+  try {
+    const res = await fetch('/api/leaderboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, score })
+    });
+    if (res.status === 409) { flash('Score too low for leaderboard'); submitScoreBtn.disabled = true; return; }
+    if (!res.ok) throw new Error('Submit failed');
+    gameOverOverlay.classList.remove('visible');
+    await showLeaderboard();
+  } catch {
+    flash('Could not submit score');
+  }
+}
+
+async function fetchLeaderboard() {
+  try {
+    const res = await fetch('/api/leaderboard?limit=10');
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
+async function showLeaderboard() {
+  lbList.innerHTML = '<p style="color:#555;font-size:0.6rem">Loading...</p>';
+  lbOverlay.classList.add('visible');
+  const entries = await fetchLeaderboard();
+  if (entries.length === 0) {
+    lbList.innerHTML = '<p style="color:#555;font-size:0.6rem;letter-spacing:0.1em">No scores yet</p>';
+    return;
+  }
+  lbList.innerHTML = entries.map((e, i) => {
+    const d = e.created_at ? e.created_at.slice(0, 10) : '';
+    return `<div class="lb-row">
+      <span class="rank">${i + 1}.</span>
+      <span class="name">${e.name.replace(/</g, '&lt;')}</span>
+      <span class="lb-score">${e.score}</span>
+      <span class="date">${d}</span>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('resetBtn').addEventListener('click', resetGame);
+
+document.getElementById('giveUpBtn').addEventListener('click', () => {
+  if (gameOver) return;
+  showGameOver();
+});
+
+submitScoreBtn.addEventListener('click', () => {
+  const name = nameInput.value.trim().slice(0, 20);
+  if (!name) { nameInput.focus(); return; }
+  submitScoreBtn.disabled = true;
+  submitScore(name);
+});
+
+document.getElementById('playAgainBtn').addEventListener('click', resetGame);
+
+document.getElementById('lbBtn').addEventListener('click', showLeaderboard);
+
+document.getElementById('closeLbBtn').addEventListener('click', () => {
+  lbOverlay.classList.remove('visible');
+});
+
+initGrid();
+draw();
+</script>
+</body>
+</html>
