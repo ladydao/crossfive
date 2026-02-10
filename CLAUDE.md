@@ -41,8 +41,18 @@ docker run -p 3000:3000 -v cross-five-data:/app cross-five
 
 ## API Endpoints
 
+- `GET /api/session` — issues an HMAC-signed session token for leaderboard submission
 - `GET /api/leaderboard?limit=10` — returns top scores as JSON array
-- `POST /api/leaderboard` — accepts `{ name, score }`, validates, inserts; returns 409 if score too low for top 10
+- `POST /api/leaderboard` — accepts `{ name, score, token }`, validates token and inserts; returns 403 if token invalid, 409 if score too low
+
+## Session Token Auth
+
+Leaderboard submissions are protected by HMAC-SHA256 signed session tokens:
+- **Flow**: Frontend fetches a token via `GET /api/session` on game start/reset, includes it in the POST on submission
+- **Token format**: `sessionId:timestamp:hmacSignature`
+- **Server secret**: Random 32 bytes, regenerated on each server restart
+- **Checks**: Valid HMAC signature (timing-safe compare), one-time use, minimum 5s elapsed since token creation
+- **Storage**: Active session IDs held in an in-memory `Set` (cleared on restart)
 
 ## Code Structure (index.html)
 
