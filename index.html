@@ -241,6 +241,14 @@ let score = 0;
 let hoverCell = null;
 let statusTimeout;
 let gameOver = false;
+let sessionToken = null;
+
+async function fetchSession() {
+  try {
+    const res = await fetch('/api/session');
+    if (res.ok) { const data = await res.json(); sessionToken = data.token; }
+  } catch {}
+}
 
 const DIRS = [[0,1],[1,0],[1,1],[1,-1]];
 
@@ -502,6 +510,7 @@ function resetGame() {
   submitScoreBtn.disabled = false;
   nameInput.value = '';
   initGrid();
+  fetchSession();
   flash('Board reset');
   draw();
 }
@@ -534,7 +543,7 @@ async function submitScore(name) {
     const res = await fetch('/api/leaderboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, score })
+      body: JSON.stringify({ name, score, token: sessionToken })
     });
     if (res.status === 409) { flash('Score too low for leaderboard'); submitScoreBtn.disabled = true; return; }
     if (!res.ok) throw new Error('Submit failed');
@@ -597,6 +606,7 @@ document.getElementById('closeLbBtn').addEventListener('click', () => {
 });
 
 initGrid();
+fetchSession();
 draw();
 </script>
 </body>

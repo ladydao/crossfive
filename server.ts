@@ -1,4 +1,38 @@
 import { Database } from "bun:sqlite";
+import { randomBytes, createHmac, timingSafeEqual } from "crypto";
+
+const SECRET = randomBytes(32);
+const activeSessions = new Set<string>();
+
+function createToken(): string {
+  const sessionId = randomBytes(16).toString("hex");
+  const timestamp = Date.now().toString();
+  const data = `${sessionId}:${timestamp}`;
+  const sig = createHmac("sha256", SECRET).update(data).digest("hex");
+  activeSessions.add(sessionId);
+  return `${data}:${sig}`;
+}
+
+function verifyToken(token: string): { valid: boolean; error?: string } {
+  const parts = token.split(":");
+  if (parts.length !== 3) return { valid: false, error: "Malformed token" };
+  const [sessionId, timestamp, sig] = parts;
+
+  const data = `${sessionId}:${timestamp}`;
+  const expected = createHmac("sha256", SECRET).update(data).digest("hex");
+  if (!timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expected, "hex")))
+    return { valid: false, error: "Invalid signature" };
+
+  if (!activeSessions.has(sessionId))
+    return { valid: false, error: "Session already used or unknown" };
+
+  const elapsed = Date.now() - Number(timestamp);
+  if (elapsed < 5000)
+    return { valid: false, error: "Session too short" };
+
+  activeSessions.delete(sessionId);
+  return { valid: true };
+}
 
 const db = new Database("leaderboard.db");
 db.run("PRAGMA journal_mode = WAL");
@@ -33,6 +67,11 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
 
+    // API: GET session token
+    if (req.method === "GET" && url.pathname === "/api/session") {
+      return Response.json({ token: createToken() });
+    }
+
     // API: GET leaderboard
     if (req.method === "GET" && url.pathname === "/api/leaderboard") {
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "20") || 20, 1), 100);
@@ -44,6 +83,10 @@ Bun.serve({
     if (req.method === "POST" && url.pathname === "/api/leaderboard") {
       try {
         const body = await req.json();
+        const token = typeof body.token === "string" ? body.token : "";
+        const { valid, error } = verifyToken(token);
+        if (!valid) return Response.json({ error: error || "Invalid token" }, { status: 403 });
+
         const name = (typeof body.name === "string" ? body.name : "").trim().slice(0, 20);
         const score = typeof body.score === "number" ? Math.floor(body.score) : NaN;
 
